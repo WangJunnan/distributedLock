@@ -84,7 +84,11 @@ public class RedisDistributedLock implements DistributedLock {
         try {
             final String luaScript = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
             List<String> keys = Collections.singletonList(buildKey(lockKey));
-            List<String> args = Collections.singletonList(THREADLOCAL_LOCKVALUE.get());
+            String value = THREADLOCAL_LOCKVALUE.get();
+            if (value == null) {
+                return;
+            }
+            List<String> args = Collections.singletonList(value);
             if (!Long.valueOf(1).equals(jedis.eval(luaScript, keys, args))) {
                 log.error("unlock fail, it could be that the lock has expired");
             }
