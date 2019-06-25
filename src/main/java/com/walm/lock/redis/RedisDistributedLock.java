@@ -32,6 +32,10 @@ public class RedisDistributedLock implements DistributedLock {
 
     @Override
     public boolean lock(String lockKey, long waitTime, long expireTime, TimeUnit unit) {
+        // 支持可重入
+        if (THREADLOCAL_LOCKVALUE.get() != null) {
+            return true;
+        }
         Jedis jedis = redisConnectionFactory.getJedis();
         long startLockTime = System.currentTimeMillis();
         try {
@@ -60,6 +64,9 @@ public class RedisDistributedLock implements DistributedLock {
 
     @Override
     public boolean tryLock(String lockKey, long expireTime, TimeUnit unit) {
+        if (THREADLOCAL_LOCKVALUE.get() != null) {
+            return true;
+        }
         Jedis jedis = redisConnectionFactory.getJedis();
         try {
             String value = UUID.randomUUID().toString();
