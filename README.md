@@ -1,12 +1,11 @@
-# 分布式锁
+# 分布式锁 (分别基于 redis zookeeper 实现)
 
-## 使用方式
+## 快速使用
 
 > 实际集成方式视具体项目
 
  * 下载项目`mvn install`到本地
  * 项目引用
- 
  ```
  <dependency>
     <groupId>com.walm</groupId>
@@ -15,7 +14,8 @@
  </dependency>
  ```
  
- * 使用
+ * 使用 Redis lock
+ 
  
  ```java
  private RedisConnectionFactory redisConnectionFactory = new JedisConnectionFactory("172.17.41.32", null, 6379);
@@ -33,3 +33,23 @@
  }
  
  ```
+ 
+ * 使用 zookeeper lock
+ 
+  ```java
+  public static DistributedLock zkDistributedLock = new ZkDistributedLock("172.17.41.32:2181");
+  
+  try {
+     if (zkDistributedLock.lock("key")) {
+     // get lock sucess
+     // todo something
+     }
+  } catch (Exception e) {
+      //
+  } finally {
+      zkDistributedLock.unlock("key");
+  }
+  
+  ```
+ 
+ 

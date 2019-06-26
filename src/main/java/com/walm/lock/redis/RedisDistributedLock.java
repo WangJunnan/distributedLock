@@ -11,6 +11,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * <p>RedisDistributedLock</p>
  *
+ * <p>基于单机redis实现的分布式锁</p>
+ *
  * @author wangjn
  * @date 2019/6/24
  */
@@ -23,7 +25,10 @@ public class RedisDistributedLock implements DistributedLock {
     private static final String SET_IF_NOT_EXIST = "NX";
     private static final String SET_WITH_EXPIRE_TIME = "EX";
 
-    public static ThreadLocal<String> THREADLOCAL_LOCKVALUE = new ThreadLocal<>();
+    /**
+     * 支持可重入锁，判断当前线程是否已经持有锁
+     */
+    public static ThreadLocal<String> threadlocal_lockvalue = new ThreadLocal<>();
 
     public RedisDistributedLock(RedisConnectionFactory redisConnectionFactory, String lockKeyPrefix) {
         this.redisConnectionFactory = redisConnectionFactory;
@@ -32,18 +37,19 @@ public class RedisDistributedLock implements DistributedLock {
 
     @Override
     public boolean lock(String lockKey, long waitTime, long expireTime, TimeUnit unit) {
-        // 支持可重入
-        if (THREADLOCAL_LOCKVALUE.get() != null) {
+        // 支持可重入 todo 区分 lockKey
+        if (threadlocal_lockvalue.get() != null) {
             return true;
         }
         Jedis jedis = redisConnectionFactory.getJedis();
         long startLockTime = System.currentTimeMillis();
         try {
             for (; ; ) {
+                // 每次上锁生成不一样的随机值
                 String value = UUID.randomUUID().toString();
                 String result = jedis.set(buildKey(lockKey), value, SET_IF_NOT_EXIST, SET_WITH_EXPIRE_TIME, unit.toSeconds(expireTime));
                 if ("OK".equalsIgnoreCase(result)) {
-                    THREADLOCAL_LOCKVALUE.set(value);
+                    threadlocal_lockvalue.set(value);
                     return true;
                 }
                 Thread.sleep(200);
@@ -63,8 +69,13 @@ public class RedisDistributedLock implements DistributedLock {
     }
 
     @Override
+    public boolean lock(String lockKey) {
+        return lock(lockKey, 5, 5, TimeUnit.SECONDS);
+    }
+
+    @Override
     public boolean tryLock(String lockKey, long expireTime, TimeUnit unit) {
-        if (THREADLOCAL_LOCKVALUE.get() != null) {
+        if (threadlocal_lockvalue.get() != null) {
             return true;
         }
         Jedis jedis = redisConnectionFactory.getJedis();
@@ -72,7 +83,7 @@ public class RedisDistributedLock implements DistributedLock {
             String value = UUID.randomUUID().toString();
             String result = jedis.set(buildKey(lockKey), value, SET_IF_NOT_EXIST, SET_WITH_EXPIRE_TIME, unit.toSeconds(expireTime));
             if ("OK".equalsIgnoreCase(result)) {
-                THREADLOCAL_LOCKVALUE.set(value);
+                threadlocal_lockvalue.set(value);
                 return true;
             }
         } catch (Exception e) {
@@ -86,12 +97,19 @@ public class RedisDistributedLock implements DistributedLock {
     }
 
     @Override
+    public boolean tryLock(String lockKey) {
+        return tryLock(lockKey, 5, TimeUnit.SECONDS);
+    }
+
+    @Override
     public void unlock(String lockKey) {
         Jedis jedis = redisConnectionFactory.getJedis();
         try {
+            // lua script for del key
+            // 先判断要释放的锁 是否是当前锁，防止异常情况下误解其他人上的锁
             final String luaScript = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
             List<String> keys = Collections.singletonList(buildKey(lockKey));
-            String value = THREADLOCAL_LOCKVALUE.get();
+            String value = threadlocal_lockvalue.get();
             if (value == null) {
                 return;
             }
@@ -105,7 +123,7 @@ public class RedisDistributedLock implements DistributedLock {
             if (jedis != null) {
                 jedis.close();
             }
-            THREADLOCAL_LOCKVALUE.remove();
+            threadlocal_lockvalue.remove();
         }
     }
 

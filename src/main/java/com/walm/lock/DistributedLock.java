@@ -22,12 +22,28 @@ public interface DistributedLock {
     boolean lock(String lockKey, long waitTime, long expireTime, TimeUnit unit);
 
     /**
+     * 获取锁
+     *
+     * @param lockKey
+     * @return
+     */
+    boolean lock(String lockKey);
+
+    /**
      * 尝试获取锁，立即返回成功或失败
      *
      * @param lockKey
      * @return
      */
     boolean tryLock(String lockKey, long expireTime, TimeUnit unit);
+
+    /**
+     * 尝试获取锁，立即返回成功或失败
+     *
+     * @param lockKey
+     * @return
+     */
+    boolean tryLock(String lockKey);
 
     /**
      * 释放锁
